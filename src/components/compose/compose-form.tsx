@@ -13,6 +13,7 @@ import { Tooltip } from "@/components/ui/tooltip";
 import { useSelectedMailbox } from "@/components/mailbox-provider";
 import { authFetch } from "@/lib/auth/client";
 import { formatEmailAddress, getEmailAddress } from "@/lib/email/address";
+import { useCompose } from "@/components/compose/compose-context";
 import { cn } from "@/lib/utils";
 import { SendReview } from "@/components/agent/send-review";
 import type { ReviewSnapshot } from "@/components/agent/send-review-types";
@@ -45,6 +46,7 @@ export function ComposeForm({
 }) {
 	const { t } = useLanguage();
 	const router = useRouter();
+	const { showNotice } = useCompose();
 	const { selectedMailbox, setSelectedMailbox, mailboxes } = useSelectedMailbox();
 	const [draftId, setDraftId] = useState<string | null>(null);
 	const [agentRevision, setAgentRevision] = useState<number | null>(null);
@@ -74,7 +76,9 @@ export function ComposeForm({
 	const [loadedDraftMailboxId, setLoadedDraftMailboxId] = useState<string | null>(null);
 	const [loadedDraftFrom, setLoadedDraftFrom] = useState<string | null>(null);
 	const [selectedFrom, setSelectedFrom] = useState("");
+	const formRef = useRef<HTMLFormElement>(null);
 	const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+	const pendingSave = useRef<(() => Promise<void>) | null>(null);
 	const draftGeneration = useRef(0);
 	const attachmentInput = useRef<HTMLInputElement | null>(null);
 	const fileDragDepth = useRef(0);
@@ -195,7 +199,12 @@ export function ComposeForm({
 		previousSignature.current = nextSignature;
 	}, [loadingDraft, selectedMailbox?.id, selectedMailbox?.signature]);
 
+	useEffect(() => () => {
+		void pendingSave.current?.();
+	}, []);
+
 	useEffect(() => {
+		pendingSave.current = null;
 		const bodyContent = htmlToPlainText(html).trim();
 		const signatureOnly = bodyContent === (selectedMailbox?.signature?.trim() ?? "");
 		const hasContent =
@@ -204,7 +213,7 @@ export function ComposeForm({
 		if (saveTimer.current) clearTimeout(saveTimer.current);
 
 		const generation = draftGeneration.current;
-		saveTimer.current = setTimeout(async () => {
+		const save = async () => {
 			const payload = {
 				mailboxId: selectedMailbox?.id,
 				from: fromAddr,
@@ -231,12 +240,22 @@ export function ComposeForm({
 				}
 				setDraftId(data.draft.id);
 			}
+		};
+		pendingSave.current = save;
+		saveTimer.current = setTimeout(() => {
+			pendingSave.current = null;
+			void save();
 		}, 900);
 
 		return () => {
 			if (saveTimer.current) clearTimeout(saveTimer.current);
 		};
 	}, [bcc, cc, draftId, fromAddr, html, loadingDraft, quotedHtml, selectedMailbox?.id, selectedMailbox?.signature, subject, threading, to]);
+
+	useEffect(() => {
+		if (!draftIdToLoad || loadingDraft) return;
+		formRef.current?.querySelector<HTMLElement>("[contenteditable='true']")?.focus();
+	}, [draftIdToLoad, loadingDraft]);
 
 	async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
 		event.preventDefault();
@@ -253,6 +272,8 @@ export function ComposeForm({
 			setToast({ type: "error", message: t("compose.error.emptyBody") });
 			return;
 		}
+		if (saveTimer.current) clearTimeout(saveTimer.current);
+		pendingSave.current = null;
 		setLoading(true);
 		const fullHtml = joinQuotedHtml(html, quotedHtml);
 		if (draftId && agentRevision !== null) {
@@ -280,24 +301,32 @@ export function ComposeForm({
 			finally { setLoading(false); }
 			return;
 		}
-		const res = await authFetch("/api/send", {
-			method: "POST",
-			body: buildSendFormData({
-				attachments,
-				from: fromAddr,
-				to: recipientsToHeader(to),
-				cc: recipientsToHeader(cc),
-				bcc: recipientsToHeader(bcc),
-				subject,
-				text: htmlToPlainText(fullHtml),
-				html: fullHtml,
-				mailboxId: selectedMailbox?.id,
-				threading: threading ?? undefined,
-				draftId,
-				scheduledAt,
-			}),
-		});
-		const data = (await res.json()) as { messageId?: string; scheduled?: boolean; error?: string };
+		let res: Response;
+		let data: { messageId?: string; scheduled?: boolean; error?: string };
+		try {
+			res = await authFetch("/api/send", {
+				method: "POST",
+				body: buildSendFormData({
+					attachments,
+					from: fromAddr,
+					to: recipientsToHeader(to),
+					cc: recipientsToHeader(cc),
+					bcc: recipientsToHeader(bcc),
+					subject,
+					text: htmlToPlainText(fullHtml),
+					html: fullHtml,
+					mailboxId: selectedMailbox?.id,
+					threading: threading ?? undefined,
+					draftId,
+					scheduledAt,
+				}),
+			});
+			data = (await res.json()) as { messageId?: string; scheduled?: boolean; error?: string };
+		} catch {
+			setLoading(false);
+			setToast({ type: "error", message: t("compose.error.sendFailed") });
+			return;
+		}
 		setLoading(false);
 
 		if (!res.ok) {
@@ -310,6 +339,7 @@ export function ComposeForm({
 				window.dispatchEvent(new Event("mailflare:messages-changed"));
 			});
 		}
+		draftGeneration.current += 1;
 		setDraftId(null);
 		setTo([]);
 		setCc([]);
@@ -323,18 +353,31 @@ export function ComposeForm({
 		setQuotedHtml(null);
 		setAttachments([]);
 		setScheduledAt(null);
-		setToast({ type: "success", message: data.scheduled ? t("compose.scheduled") : t("compose.sent") });
+		showNotice(data.scheduled ? t("compose.scheduled") : t("compose.sent"));
 		window.dispatchEvent(new Event("mailflare:messages-changed"));
+
+		if (onClose) {
+			onClose();
+			return;
+		}
+		router.push("/sent");
 	}
 
 	async function deleteDraftAndClose() {
 		if (saveTimer.current) clearTimeout(saveTimer.current);
+		pendingSave.current = null;
 		draftGeneration.current += 1;
 		setDeletingDraft(true);
 
 		if (draftId) {
-			const res = await authFetch(`/api/drafts/${draftId}`, { method: "DELETE" });
-			if (!res.ok) {
+			let deleted = false;
+			try {
+				const res = await authFetch(`/api/drafts/${draftId}`, { method: "DELETE" });
+				deleted = res.ok || res.status === 404;
+			} catch {
+				deleted = false;
+			}
+			if (!deleted) {
 				setDeletingDraft(false);
 				setToast({ type: "error", message: t("compose.error.deleteDraft") });
 				return;
@@ -449,11 +492,11 @@ export function ComposeForm({
 				>
 					<FileText className="h-4 w-4 shrink-0 text-neutral-500" />
 					<span className="max-w-48 truncate">{attachment.filename}</span>
-					<span className="text-xs text-neutral-400">{formatAttachmentSize(attachment.size)}</span>
+					<span className="text-xs text-neutral-500">{formatAttachmentSize(attachment.size)}</span>
 					<button
 						type="button"
 						onClick={() => void removeStoredAttachment(attachment.id)}
-						className="rounded-full p-1 text-neutral-400 hover:bg-neutral-200 hover:text-neutral-700"
+						className="rounded-full p-1 text-neutral-500 hover:bg-neutral-200 hover:text-neutral-700"
 					>
 						<X className="h-3.5 w-3.5" />
 						<span className="sr-only">{t("compose.removeAttachment")}</span>
@@ -467,7 +510,7 @@ export function ComposeForm({
 				>
 					<FileText className="h-4 w-4 shrink-0 text-neutral-500" />
 					<span className="max-w-48 truncate font-medium">{attachment.file.name}</span>
-					<span className="text-xs text-neutral-400">
+					<span className="text-xs text-neutral-500">
 						{formatAttachmentSize(attachment.file.size)}
 					</span>
 					<button
@@ -477,7 +520,7 @@ export function ComposeForm({
 								current.filter((item) => item.id !== attachment.id),
 							)
 						}
-						className="rounded-full p-1 text-neutral-400 hover:bg-neutral-200 hover:text-neutral-700"
+						className="rounded-full p-1 text-neutral-500 hover:bg-neutral-200 hover:text-neutral-700"
 					>
 						<X className="h-3.5 w-3.5" />
 						<span className="sr-only">{t("compose.removeAttachment")}</span>
@@ -504,6 +547,7 @@ export function ComposeForm({
 			{mode === "popup" && modalMode && !minimized && <div className="fixed inset-0 z-40 bg-neutral-950/65" aria-hidden="true" />}
 			{toast && (
 				<div
+					role={toast.type === "error" ? "alert" : "status"}
 					className={cn(
 						"fixed right-6 top-6 z-[60] rounded-lg px-4 py-3 text-sm font-medium shadow-lg",
 						toast.type === "success" ? "bg-green-600 text-white" : "bg-red-600 text-white",
@@ -512,7 +556,7 @@ export function ComposeForm({
 					{toast.message}
 				</div>
 			)}
-			<form onSubmit={onSubmit} className={frameClass} role={modalMode && !minimized ? "dialog" : undefined} aria-modal={modalMode && !minimized || undefined} aria-label={modalMode && !minimized ? t("compose.dialogLabel") : undefined} onKeyDown={(event) => { if (modalMode && !minimized && event.key === "Escape") { event.preventDefault(); setModalMode(false); } }} onDragEnterCapture={minimized ? undefined : onFileDragEnter} onDragOverCapture={minimized ? undefined : onFileDragOver} onDragLeaveCapture={minimized ? undefined : onFileDragLeave} onDropCapture={minimized ? undefined : onFileDrop}>
+			<form onSubmit={onSubmit} className={frameClass} ref={formRef} role={modalMode && !minimized ? "dialog" : mode === "popup" ? "region" : undefined} aria-modal={modalMode && !minimized || undefined} aria-label={mode === "popup" ? t("compose.dialogLabel") : undefined} onKeyDown={(event) => { if (modalMode && !minimized && event.key === "Escape") { event.preventDefault(); setModalMode(false); } }} onDragEnterCapture={minimized ? undefined : onFileDragEnter} onDragOverCapture={minimized ? undefined : onFileDragOver} onDragLeaveCapture={minimized ? undefined : onFileDragLeave} onDropCapture={minimized ? undefined : onFileDrop}>
 				{draggingFiles && !minimized && (
 					<div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center border-2 border-dashed border-blue-400 bg-blue-50/90 text-sm font-medium text-blue-700" aria-hidden="true">
 						{t("compose.dropFiles")}
@@ -572,6 +616,7 @@ export function ComposeForm({
 					onChange={setTo}
 					placeholder={t("compose.toPlaceholder")}
 					required
+					autoFocus={!draftIdToLoad}
 					disabled={loadingDraft}
 					trailing={
 						<>

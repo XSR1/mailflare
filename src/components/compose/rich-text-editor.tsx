@@ -163,6 +163,7 @@ export function RichTextEditor({
 							type="button"
 							onClick={() => setShowQuoted((open) => !open)}
 							aria-expanded={showQuoted}
+							aria-label={showQuoted ? t("editor.hideQuoted") : t("editor.showQuoted")}
 							className="rounded-full border border-neutral-200 bg-neutral-100 px-2 text-xs leading-5 text-neutral-500 hover:bg-neutral-200"
 							title={showQuoted ? t("editor.hideQuoted") : t("editor.showQuoted")}
 						>
@@ -236,6 +237,7 @@ export function RichTextEditor({
 								if (event.key === "Escape") setLinkOpen(false);
 							}}
 							placeholder="https://example.com"
+							aria-label={t("editor.insertLink")}
 							className="h-8 w-64 rounded-md border border-neutral-200 px-2 text-sm outline-none focus:border-blue-400"
 						/>
 						<button type="submit" className="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700">
