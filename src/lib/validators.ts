@@ -92,6 +92,12 @@ export const passwordResetConfirmSchema = z.object({
 	password: z.string().min(8).max(128),
 });
 
+/** `/api/auth/device`: either email + password, or a challenge + code after MFA. */
+export const deviceLoginSchema = z.union([
+	z.object({ email: z.string().trim().email(), password: z.string().min(1), deviceName: z.string().trim().min(1).max(100) }),
+	z.object({ challengeToken: z.string().min(8).max(200), code: z.string().trim().min(6).max(32), deviceName: z.string().trim().min(1).max(100) }),
+]);
+
 export const mfaVerifySchema = z.object({
 	challengeToken: z.string().min(8).max(200),
 	code: z.string().trim().min(6).max(32),
@@ -237,6 +243,14 @@ export const updateSpamSettingsSchema = z.object({
 
 export const updateTrashRetentionSettingsSchema = z.object({
 	days: z.number().int().min(1).max(365).nullable(),
+});
+
+export const updateRemoteContentSettingsSchema = z.object({
+	mode: z.enum(["ask", "new_sender", "allow"]),
+});
+
+export const trustRemoteContentSenderSchema = z.object({
+	sender: z.string().trim().toLowerCase().email().max(320),
 });
 
 export const updateRecipientAddressSettingsSchema = z.object({

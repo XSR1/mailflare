@@ -27,11 +27,17 @@ export const users = sqliteTable("users", {
 	trashRetentionDays: integer("trash_retention_days"),
 	// Off shows the mailbox only. On shows Name <mailbox> on To, Cc, and Bcc.
 	showFullRecipientAddresses: integer("show_full_recipient_addresses", { mode: "boolean" }).notNull().default(false),
+	// When the reader loads remote images and styles without being asked: always ask, only for senders not yet allowed, or always.
+	remoteContentMode: text("remote_content_mode", { enum: ["ask", "new_sender", "allow"] }).notNull().default("allow"),
 	// TOTP second factor. The secret is written at enrolment and only counts
 	// once the user has proven a code from their authenticator.
 	totpSecret: text("totp_secret"),
 	totpEnabled: integer("totp_enabled", { mode: "boolean" }).notNull().default(false),
 	totpConfirmedAt: integer("totp_confirmed_at", { mode: "timestamp" }),
+	lastSignInAt: integer("last_sign_in_at", { mode: "timestamp" }),
+	// Set when an admin deletes the account. The account is also `disabled` and can be restored until the
+	// retention window ends, after which the scheduled purge removes it and its data.
+	deletedAt: integer("deleted_at", { mode: "timestamp" }),
 	createdByUserId: text("created_by_user_id").references((): AnySQLiteColumn => users.id, { onDelete: "set null" }),
 	createdAt: integer("created_at", { mode: "timestamp" })
 		.notNull()
@@ -170,6 +176,8 @@ export const contacts = sqliteTable(
 			.notNull()
 			.default("inbound"),
 		blocked: integer("blocked", { mode: "boolean" }).notNull().default(false),
+		// Set when the user allows remote content from this sender; "new_sender" mode loads it without asking afterwards.
+		remoteContentAllowed: integer("remote_content_allowed", { mode: "boolean" }).notNull().default(false),
 		lastSeenAt: integer("last_seen_at", { mode: "timestamp" }),
 		createdAt: integer("created_at", { mode: "timestamp" })
 			.notNull()
@@ -209,9 +217,36 @@ export const jmapMailboxRevisions = sqliteTable("jmap_mailbox_revisions", {
 	revision: integer("revision").notNull().default(0),
 });
 
+/**
+ * JMAP change log, written only by the `jmap_changes_*` triggers of migration
+ * 0064: one row per created, updated or destroyed Email (and per folder or
+ * mailbox change), so `Email/changes`, `Mailbox/changes` and `Thread/changes`
+ * return real deltas. `seq` is the state; rows older than the retention
+ * window are pruned and `jmap_change_floor` records the last pruned seq.
+ */
+export const jmapChanges = sqliteTable(
+	"jmap_changes",
+	{
+		seq: integer("seq").primaryKey({ autoIncrement: true }),
+		mailboxId: text("mailbox_id").notNull(),
+		objectType: text("object_type", { enum: ["email", "mailbox"] }).notNull(),
+		objectId: text("object_id").notNull(),
+		threadId: text("thread_id"),
+		change: text("change", { enum: ["created", "updated", "destroyed"] }).notNull(),
+		createdAt: integer("created_at").notNull().default(sql`(unixepoch())`),
+	},
+	(table) => [index("jmap_changes_mailbox_seq_idx").on(table.mailboxId, table.seq)],
+);
+
+export const jmapChangeFloor = sqliteTable("jmap_change_floor", {
+	id: integer("id").primaryKey(),
+	seq: integer("seq").notNull().default(0),
+});
+
 export const apiKeys = sqliteTable("api_keys", {
 	id: text("id").primaryKey(),
-	kind: text("kind", { enum: ["legacy", "mcp"] }).notNull().default("legacy"),
+	/** `device` keys come from a mobile sign-in (`/api/auth/device`) and are listed under Devices. */
+	kind: text("kind", { enum: ["legacy", "mcp", "device"] }).notNull().default("legacy"),
 	userId: text("user_id")
 		.notNull()
 		.references(() => users.id, { onDelete: "cascade" }),
@@ -241,6 +276,8 @@ export const messages = sqliteTable(
 		toAddr: text("to_addr").notNull(),
 		ccAddr: text("cc_addr"),
 		bccAddr: text("bcc_addr"),
+		/** Full Reply-To header, comma-joined. Replies go here instead of `fromAddr` when set. */
+		replyTo: text("reply_to"),
 		subject: text("subject"),
 		snippet: text("snippet"),
 		textBody: text("text_body"),
@@ -378,7 +415,7 @@ export const outboundJobs = sqliteTable("outbound_jobs", {
 		.notNull()
 		.references(() => users.id, { onDelete: "cascade" }),
 	messageId: text("message_id").references(() => messages.id, { onDelete: "set null" }),
-	status: text("status", { enum: ["queued", "sent", "failed"] }).notNull().default("queued"),
+	status: text("status", { enum: ["queued", "sending", "sent", "failed"] }).notNull().default("queued"),
 	payload: text("payload").notNull(),
 	error: text("error"),
 	scheduledAt: integer("scheduled_at", { mode: "timestamp" }),
@@ -555,6 +592,30 @@ export const sessions = sqliteTable("sessions", {
 		.notNull()
 		.$defaultFn(() => new Date()),
 });
+
+/** A native app's push registration (APNs), owned by the device's API key. */
+export const pushDevices = sqliteTable(
+	"push_devices",
+	{
+		id: text("id").primaryKey(),
+		userId: text("user_id")
+			.notNull()
+			.references(() => users.id, { onDelete: "cascade" }),
+		apiKeyId: text("api_key_id")
+			.notNull()
+			.references(() => apiKeys.id, { onDelete: "cascade" }),
+		platform: text("platform", { enum: ["apns"] }).notNull(),
+		token: text("token").notNull(),
+		environment: text("environment", { enum: ["production", "sandbox"] }).notNull().default("production"),
+		topic: text("topic").notNull(),
+		/** Base64 raw P-256 public key; previews are encrypted to it. */
+		publicKey: text("public_key"),
+		previews: integer("previews", { mode: "boolean" }).notNull().default(true),
+		createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+		updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+	},
+	(table) => [uniqueIndex("push_devices_platform_token_idx").on(table.platform, table.token), index("push_devices_user_idx").on(table.userId)],
+);
 
 export const pushSubscriptions = sqliteTable(
 	"push_subscriptions",
