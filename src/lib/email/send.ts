@@ -15,7 +15,9 @@ import { getOutboundAttachmentMaxMb } from "@/lib/email/attachment-policy";
 import { getOutboundProviderConfig, sendThroughProvider } from "@/lib/email/outbound-provider";
 import { prepareCloudflareAttachments } from "@/lib/email/cloud-attachment-utils";
 import { ensureTrackingToken, getTrackingHostForSender } from "@/lib/tracking/open-tracking";
+import { setFollowUp } from "@/lib/follow-ups/service";
 import { buildTrackingPixelUrl, injectTrackingPixel, resolveTrackingOrigin } from "@/lib/tracking/open-tracking-utils";
+import { getComposePreferences } from "@/lib/compose/preferences";
 
 export type SendEmailInput = {
 	userId: string;
@@ -38,15 +40,16 @@ export type SendEmailInput = {
 	attachments?: AttachmentContent[];
 	/** Future delivery time. Values at or before the current time send immediately. */
 	scheduledAt?: string | Date;
-	/** Hold the send for UNDO_SEND_SECONDS (via the scheduled queue) so the user can cancel it. */
+	/** Hold the send for the user's undo window (via the scheduled queue) so they can cancel it. */
 	undoSend?: boolean;
 	/** Add a read-receipt pixel to the HTML part (the stored Sent copy stays without it). */
 	trackOpens?: boolean;
+	/** Bring the thread back to the inbox after this many days unless a reply arrives. */
+	followUpDays?: number;
 	publicOrigin?: string;
 };
 
 /** How long a send started from the composer waits before it is delivered. */
-export const UNDO_SEND_SECONDS = 15;
 const MAX_RECIPIENTS = 50;
 const MAX_QUEUE_DELAY_SECONDS = 24 * 60 * 60;
 
@@ -119,8 +122,9 @@ export async function sendEmail(
 	const userScheduledAt = requestedSchedule && requestedSchedule.getTime() > Date.now()
 		? requestedSchedule
 		: null;
-	// An explicit schedule wins; otherwise an undoable send waits out the undo window.
-	const scheduledAt = userScheduledAt ?? (input.undoSend ? new Date(Date.now() + UNDO_SEND_SECONDS * 1000) : null);
+	// An explicit schedule wins; otherwise an undoable send waits out the user's undo window.
+	const undoSeconds = !userScheduledAt && input.undoSend ? (await getComposePreferences(env, input.userId)).undoSendSeconds : 0;
+	const scheduledAt = userScheduledAt ?? (undoSeconds > 0 ? new Date(Date.now() + undoSeconds * 1000) : null);
 	const snippet = buildSnippet(input.text ?? null, input.html ?? null);
 	const toAddr = joinEmailAddressList(to);
 
@@ -183,7 +187,7 @@ export async function sendEmail(
 	};
 	if (scheduledAt) {
 		await enqueueScheduledDelivery(env, delivery, scheduledAt);
-		return userScheduledAt ? { messageId, scheduled: true } : { messageId, scheduled: true, undoSeconds: UNDO_SEND_SECONDS };
+		return userScheduledAt ? { messageId, scheduled: true } : { messageId, scheduled: true, undoSeconds };
 	}
 
 	await deliverEmail(env, delivery);
@@ -245,6 +249,10 @@ async function deliverEmail(env: CloudflareEnv, delivery: PreparedDelivery): Pro
 			})
 			.where(eq(messages.id, messageId));
 		await db.update(outboundJobs).set({ status: "sent", updatedAt: new Date() }).where(eq(outboundJobs.id, jobId));
+		if (input.followUpDays) {
+			// The message is already out; a reminder that cannot be stored must not fail the send.
+			await setFollowUp(env, { messageId, userId: input.userId, days: input.followUpDays }).catch((error) => console.error("Follow-up reminder skipped", error));
+		}
 
 		await dispatchWebhooks(env, input.userId, "message.outbound", {
 			messageId,
