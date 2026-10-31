@@ -1,0 +1,38 @@
+name: Dashboard Update
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    env:
+      UPDATE_SOURCE_REPOSITORY: ${{ vars.UPDATE_SOURCE_REPOSITORY || 'hieunc229/mailflare' }}
+
+    steps:
+      - name: Check update token
+        env:
+          UPDATE_TOKEN: ${{ secrets.MAILFLARE_UPDATE_TOKEN }}
+        run: |
+          if [ -z "${UPDATE_TOKEN}" ]; then
+            echo "::error::Add MAILFLARE_UPDATE_TOKEN as a repository Actions secret."
+            exit 1
+          fi
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.MAILFLARE_UPDATE_TOKEN }}
+
+      - name: Push update
+        run: |
+          set -euo pipefail
+          if [ -z "$(git log "origin/${GITHUB_REF_NAME}..HEAD" --oneline)" ]; then
+            echo "Repository is already up to date."
+            exit 0
+          fi
+          git push origin "HEAD:${GITHUB_REF_NAME}"
