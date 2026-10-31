@@ -13,10 +13,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout unlock
+      - name: Checkout main
         uses: actions/checkout@v4
         with:
-          ref: unlock
+          ref: main
           fetch-depth: 0
 
       - name: Download and apply first patch
@@ -40,7 +40,7 @@ jobs:
         uses: peter-evans/create-pull-request@v7
         with:
           branch: apply-selected-mailflare-patches
-          base: unlock
+          base: main
           title: Apply selected Mailflare patches
           body: Apply the two selected commits, excluding wrangler.jsonc.
           commit-message: Apply selected Mailflare patches
