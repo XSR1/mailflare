@@ -3,6 +3,12 @@ name: Apply Mailflare patches
 
 on:
   workflow_dispatch:
+    inputs:
+      target_branch:
+        description: Branch to apply patches to
+        required: true
+        default: main
+        type: string
 
 permissions:
   contents: write
@@ -13,10 +19,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout main
+      - name: Checkout target branch
         uses: actions/checkout@v4
         with:
-          ref: main
+          ref: ${{ inputs.target_branch }}
           fetch-depth: 0
 
       - name: Download and apply patch
@@ -27,19 +33,15 @@ jobs:
             https://github.com/XSR1/mailflare/commit/a27ff6f23dacb66aa0556f3a6c3933699fc51523.patch \
             -o mailflare-patches.patch
 
-          git fetch --no-tags https://github.com/XSR1/mailflare.git main
-
-          git apply --3way --index mailflare-patches.patch
-
-          rm mailflare-patches.patch
+          git apply --check mailflare-patches.patch
+          git apply mailflare-patches.patch
 
       - name: Create pull request
         uses: peter-evans/create-pull-request@v7
         with:
-          branch: apply-mailflare-patches
-          base: main
+          branch: apply-mailflare-patches-${{ inputs.target_branch }}
+          base: ${{ inputs.target_branch }}
           title: Apply Mailflare patches
-          body: |
-            Apply the selected Mailflare patches.
+          body: Apply the selected commits.
           commit-message: Apply Mailflare patches
-
+          delete-branch: true
