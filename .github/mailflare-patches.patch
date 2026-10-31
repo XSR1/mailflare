@@ -1,50 +1,97 @@
-From f161510e08c00a1cf40a5ac1d59ddfb9ddd671bf Mon Sep 17 00:00:00 2001
-From: kelvenhighermind <kelven@highermind.com.br>
-Date: Fri, 30 Oct 2026 17:45:40 -0300
-Subject: [PATCH] Unlock all features for self-hosted fork; remove license UI;
- harden email HTML
+From a27ff6f23dacb66aa0556f3a6c3933699fc51523 Mon Sep 17 00:00:00 2001
+From: XSR1 <47316244+XSR1@users.noreply.github.com>
+Date: Sat, 31 Oct 2026 11:35:51 +0000
+Subject: [PATCH] Apply selected Mailflare patches
 
-- Remove the paid license gate (unlimited accounts, shared mailboxes,
-  forwarding, branding) and stop calling the Paymug license API
-- Delete the LicenseIndicator component and its types/utils, and remove
-  its usages from the admin, calendar, dashboard, drive and settings layouts
-- Remove the Licenses entries from the admin page and admin nav
-- Strip <title> from message HTML (add to FORBID_TAGS) with a test
-- Fix the agent provider warning flashing before settings have loaded
-- Add the D1 database id and mail.learnflow.com.br custom domain
-  to wrangler.jsonc
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ---
+ src/app/(admin)/admin/page.tsx                |   9 +-
+ src/app/(admin)/agent/page.tsx                |   2 +-
+ src/app/(admin)/layout.tsx                    |   2 -
  .../(admin)/licenses/license-activation.tsx   |   3 -
+ src/app/(calendar)/layout.tsx                 |   2 -
+ src/app/(dashboard)/layout.tsx                |   2 -
+ src/app/(drive)/layout.tsx                    |   2 -
+ src/app/(settings)/layout.tsx                 |   2 -
+ src/components/admin-nav.tsx                  |   2 -
+ src/components/license-indicator-types.d.ts   |   5 -
+ src/components/license-indicator-utils.ts     |  13 -
+ src/components/license-indicator.tsx          |  42 --
+ src/lib/email/html.ts                         |   2 +-
+ src/lib/i18n/en.json                          |   2 +-
  src/lib/licenses/paymug.ts                    |   7 +-
- src/lib/licenses/service.ts                   | 180 +++---------------
+ src/lib/licenses/service.ts                   | 180 ++------
  src/lib/mailboxes/access-utils.ts             |  17 +-
- tests/account-alias-selection.test.mjs        |  23 +--
+ tests/account-alias-selection.test.mjs        |  23 +-
+ tests/email-html.test.mjs                     |   6 +
  tests/mailbox-settings-management.test.mjs    |   6 +-
  tests/messages-route-performance.test.mjs     |   4 +-
- wrangler.jsonc                                |   2 +
- src/app/(admin)/admin/page.tsx              |  9 +----
- src/app/(admin)/agent/page.tsx              |  2 +-
- src/app/(admin)/layout.tsx                  |  2 -
- src/app/(calendar)/layout.tsx               |  2 -
- src/app/(dashboard)/layout.tsx              |  2 -
- src/app/(drive)/layout.tsx                  |  2 -
- src/app/(settings)/layout.tsx               |  2 -
- src/components/admin-nav.tsx                |  2 -
- src/components/license-indicator-types.d.ts |  5 ---
- src/components/license-indicator-utils.ts   | 13 -------
- src/components/license-indicator.tsx        | 42 ---------------------
- src/lib/email/html.ts                       |  2 +-
- src/lib/i18n/en.json                        |  2 +-
- tests/email-html.test.mjs                   |  6 +++
- 22 files changed, 53 insertions(+), 282 deletions(-)
+ 23 files changed, 743 insertions(+), 282 deletions(-)
  delete mode 100644 src/components/license-indicator-types.d.ts
  delete mode 100644 src/components/license-indicator-utils.ts
  delete mode 100644 src/components/license-indicator.tsx
 
+diff --git a/src/app/(admin)/admin/page.tsx b/src/app/(admin)/admin/page.tsx
+index 2f32e0b..139438f 100644
+--- a/src/app/(admin)/admin/page.tsx
++++ b/src/app/(admin)/admin/page.tsx
+@@ -1,7 +1,7 @@
+ "use client";
+ 
+ import Link from "next/link";
+-import { BadgeDollarSign, Bot, Globe2, KeyRound, Mail, Palette, Users } from "@/components/icons";
++import { Bot, Globe2, KeyRound, Mail, Palette, Users } from "@/components/icons";
+ import { useLanguage } from "@/components/language-provider";
+ import type { TranslationKey } from "@/lib/i18n/types";
+ import { AdminUpdateCard } from "@/components/admin-update-card";
+@@ -44,13 +44,6 @@ const sections: AdminSection[] = [
+ 		icon: Palette,
+ 		permission: "primary",
+ 	},
+-	{
+-		href: "/licenses",
+-		titleKey: "admin.nav.licenses",
+-		descriptionKey: "admin.section.licenses",
+-		icon: BadgeDollarSign,
+-		permission: "primary",
+-	},
+ 	{
+ 		href: "/accounts",
+ 		titleKey: "admin.nav.accounts",
+diff --git a/src/app/(admin)/agent/page.tsx b/src/app/(admin)/agent/page.tsx
+index c149b64..85834e8 100644
+--- a/src/app/(admin)/agent/page.tsx
++++ b/src/app/(admin)/agent/page.tsx
+@@ -107,7 +107,7 @@ export default function AdminAgentPage() {
+ 		<Card className="rounded-3xl border-0 bg-white p-6">
+ 			<CardHeader className="py-0"><CardTitle className="flex items-center gap-2"><Bot className="h-5 w-5" />{t("agentAdmin.provider")}</CardTitle><CardDescription>{t("agentAdmin.providerWarning")}</CardDescription></CardHeader>
+ 			<CardContent className="pt-6"><form onSubmit={submit} className="space-y-5">
+-				<div className="space-y-2"><Label htmlFor="agent-provider">{t("agentAdmin.providerLabel")}</Label><select id="agent-provider" className="flex h-10 w-full rounded-md border border-neutral-200 bg-transparent px-3 text-sm shadow-sm shadow-neutral-200/50 focus-visible:border-blue-600 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50" value={form.provider} disabled={!loaded} onChange={(event) => setForm((current) => ({ ...current, provider: event.target.value as AgentAdminForm["provider"], baseUrl: event.target.value === "compatible" ? baseUrlForPreset(current.preset, current.baseUrl) : "", model: event.target.value === "cloudflare" ? DEFAULT_CLOUDFLARE_MODEL : "" }))}><option value="cloudflare">{t("agentAdmin.cloudflareAi")}</option><option value="compatible">{t("agentAdmin.openaiCompatible")}</option></select>{form.provider === "cloudflare" && !cloudflareAvailable && <p className="text-xs text-amber-700">{t("agentAdmin.needsBinding")}</p>}</div>
++				<div className="space-y-2"><Label htmlFor="agent-provider">{t("agentAdmin.providerLabel")}</Label><select id="agent-provider" className="flex h-10 w-full rounded-md border border-neutral-200 bg-transparent px-3 text-sm shadow-sm shadow-neutral-200/50 focus-visible:border-blue-600 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50" value={form.provider} disabled={!loaded} onChange={(event) => setForm((current) => ({ ...current, provider: event.target.value as AgentAdminForm["provider"], baseUrl: event.target.value === "compatible" ? baseUrlForPreset(current.preset, current.baseUrl) : "", model: event.target.value === "cloudflare" ? DEFAULT_CLOUDFLARE_MODEL : "" }))}><option value="cloudflare">{t("agentAdmin.cloudflareAi")}</option><option value="compatible">{t("agentAdmin.openaiCompatible")}</option></select>{loaded && form.provider === "cloudflare" && !cloudflareAvailable && <p className="text-xs text-amber-700">{t("agentAdmin.needsBinding")}</p>}</div>
+ 				{form.provider === "compatible" && <>
+ 					<div className="space-y-2"><Label htmlFor="agent-preset">{t("agentAdmin.template")}</Label><select id="agent-preset" className="flex h-10 w-full rounded-md border border-neutral-200 bg-transparent px-3 text-sm shadow-sm shadow-neutral-200/50 focus-visible:border-blue-600 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50" value={form.preset} onChange={(event) => { const preset = event.target.value as AgentProviderPreset; setForm((current) => ({ ...current, preset, baseUrl: baseUrlForPreset(preset), apiKey: "", model: "" })); }}>{PROVIDER_PRESETS.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select></div>
+ 					<div className="space-y-2"><Label htmlFor="agent-url">{t("agentAdmin.baseUrl")}</Label><Input id="agent-url" type="url" value={form.baseUrl} readOnly={form.preset !== "custom"} placeholder="https://provider.example/v1" onChange={(event) => setForm((current) => ({ ...current, baseUrl: event.target.value, model: "" }))} required /></div>
+diff --git a/src/app/(admin)/layout.tsx b/src/app/(admin)/layout.tsx
+index 674adc8..5747bd3 100644
+--- a/src/app/(admin)/layout.tsx
++++ b/src/app/(admin)/layout.tsx
+@@ -9,7 +9,6 @@ import { ComposeProvider } from "@/components/compose/compose-context";
+ import { FloatingComposer } from "@/components/compose/floating-composer";
+ import { MailboxProvider } from "@/components/mailbox-provider";
+ import { MailboxSelector } from "@/components/mailbox-selector";
+-import { LicenseIndicator } from "@/components/license-indicator";
+ import { AdminNav } from "@/components/admin-nav";
+ import { SidebarProvider } from "@/components/sidebar-state";
+ import clsx from "clsx";
+@@ -66,7 +65,6 @@ export default function DashboardLayout({
+             <div className="flex min-h-0 min-w-0 flex-col">
+                             <MobileTopBar title={mobileTitle} />
+               <header className="fixed top-2 right-4 flex items-center gap-4 z-90">
+-                <LicenseIndicator />
+                 <MailboxSelector />
+               </header>
+               <main id="main-content" tabIndex={-1} className={clsx("focus:outline-none page-flush min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain rounded-tl-3xl max-md:rounded-t-3xl max-md:bg-white max-md:pb-24 px-6 py-10 scrollbar-gutter-stable lg:px-12", mobileTitle && "max-md:[&_h1]:sr-only")}>
 diff --git a/src/app/(admin)/licenses/license-activation.tsx b/src/app/(admin)/licenses/license-activation.tsx
-index 1aff8153a..55732f19d 100644
+index 1aff815..55732f1 100644
 --- a/src/app/(admin)/licenses/license-activation.tsx
 +++ b/src/app/(admin)/licenses/license-activation.tsx
 @@ -85,9 +85,6 @@ export function LicenseActivation({ children }: { children?: ReactNode }) {
@@ -57,8 +104,212 @@ index 1aff8153a..55732f19d 100644
  						{status && <p role="status" className="mt-3 text-sm text-neutral-500">{status}</p>}
  					</div>
  				</CardContent>
+diff --git a/src/app/(calendar)/layout.tsx b/src/app/(calendar)/layout.tsx
+index 768e832..40f2ec5 100644
+--- a/src/app/(calendar)/layout.tsx
++++ b/src/app/(calendar)/layout.tsx
+@@ -11,7 +11,6 @@ import { AssistantOpenContext } from "@/components/agent/assistant-open-state";
+ import { AuthGuard } from "@/components/auth/auth-guard";
+ import { ComposeProvider } from "@/components/compose/compose-context";
+ import { FloatingComposer } from "@/components/compose/floating-composer";
+-import { LicenseIndicator } from "@/components/license-indicator";
+ import { MailSearchProvider } from "@/components/mail-search/mail-search-context";
+ import { MailboxProvider } from "@/components/mailbox-provider";
+ import { MailboxSelector } from "@/components/mailbox-selector";
+@@ -64,7 +63,6 @@ export default function CalendarLayout({ children }: { children: React.ReactNode
+                       </nav>
+                       <div id="calendar-header-slot" className="flex min-w-0 flex-1 items-center md:min-w-max max-md:order-last max-md:basis-full max-md:pl-3 max-md:empty:hidden" />
+                     </div>
+-                    <LicenseIndicator />
+                     {assistantEnabled && <Button type="button" variant="ghost" size="sm" className={assistantOpen ? "bg-blue-50 text-blue-700" : "text-neutral-600"} onClick={() => { setAssistantOpen((current) => !current); setAssistantFullSize(false); }} aria-label={assistantOpen ? t("agent.assistant.close") : t("agent.assistant.open")} aria-expanded={assistantOpen} aria-controls="email-assistant-panel"><Sparkles className="h-5 w-5" /></Button>}
+                     <MailboxSelector />
+                   </header>
+diff --git a/src/app/(dashboard)/layout.tsx b/src/app/(dashboard)/layout.tsx
+index 5632479..e844ec8 100644
+--- a/src/app/(dashboard)/layout.tsx
++++ b/src/app/(dashboard)/layout.tsx
+@@ -15,7 +15,6 @@ import { AgentPanel } from "@/components/agent/agent-panel";
+ import { AssistantOpenContext } from "@/components/agent/assistant-open-state";
+ import { Button } from "@/components/ui/button";
+ import { DnsSkippedBanner } from "@/components/dns-skipped-banner";
+-import { LicenseIndicator } from "@/components/license-indicator";
+ import { DashboardNav } from "@/components/dashboard-nav";
+ import { SidebarProvider } from "@/components/sidebar-state";
+ import { SidebarAside, MobileMenuButton } from "@/components/sidebar-aside";
+@@ -72,7 +71,6 @@ export default function DashboardLayout({
+                       >
+                         <HelpCircle className="h-5 w-5" />
+                       </Link> */}
+-                      <LicenseIndicator />
+                       {assistantEnabled && <Button type="button" variant="ghost" size="sm" className={assistantOpen ? "bg-blue-50 text-blue-700" : "text-neutral-600"} onClick={() => { setAssistantOpen((current) => !current); setAssistantFullSize(false); }} aria-label={assistantOpen ? t("agent.assistant.close") : t("agent.assistant.open")} aria-expanded={assistantOpen} aria-controls="email-assistant-panel"><Sparkles className="h-5 w-5" /></Button>}
+                       <MailboxSelector />
+                     </header>
+diff --git a/src/app/(drive)/layout.tsx b/src/app/(drive)/layout.tsx
+index 6e64484..6d4ad23 100644
+--- a/src/app/(drive)/layout.tsx
++++ b/src/app/(drive)/layout.tsx
+@@ -4,7 +4,6 @@ import { SkipToContent } from "@/components/skip-to-content";
+ import { Suspense } from "react";
+ import { AuthGuard } from "@/components/auth/auth-guard";
+ import { ComposeProvider } from "@/components/compose/compose-context";
+-import { LicenseIndicator } from "@/components/license-indicator";
+ import { MailSearchProvider } from "@/components/mail-search/mail-search-context";
+ import { MailboxProvider } from "@/components/mailbox-provider";
+ import { MailboxSelector } from "@/components/mailbox-selector";
+@@ -33,7 +32,6 @@ function DriveFrame({ children }: { children: React.ReactNode }) {
+ 				<header className="flex h-16 w-full shrink-0 items-center gap-3 pr-4 text-sm">
+ 					<MobileMenuButton className="ml-2" />
+ 					<div id="drive-header-slot" className="flex min-w-0 flex-1 items-center" />
+-					<LicenseIndicator />
+ 					<MailboxSelector />
+ 				</header>
+ 				<main id="main-content" tabIndex={-1} className="focus:outline-none min-h-0 min-w-0 flex-1 overflow-hidden md:pr-4">{children}</main>
+diff --git a/src/app/(settings)/layout.tsx b/src/app/(settings)/layout.tsx
+index ef15683..a0d5622 100644
+--- a/src/app/(settings)/layout.tsx
++++ b/src/app/(settings)/layout.tsx
+@@ -10,7 +10,6 @@ import { MailSearchInput } from "@/components/mail-search/mail-search-input";
+ import { MailSearchProvider } from "@/components/mail-search/mail-search-context";
+ import { MailboxProvider } from "@/components/mailbox-provider";
+ import { MailboxSelector } from "@/components/mailbox-selector";
+-import { LicenseIndicator } from "@/components/license-indicator";
+ import { DashboardNav } from "@/components/dashboard-nav";
+ import { SidebarProvider } from "@/components/sidebar-state";
+ import { ShortcutsProvider } from "@/components/shortcuts";
+@@ -45,7 +44,6 @@ export default function DashboardLayout({
+                   >
+                     <HelpCircle className="h-5 w-5" />
+                   </Link> */}
+-                      <LicenseIndicator />
+                       <MailboxSelector />
+                     </header>
+                     <main id="main-content" tabIndex={-1} className="focus:outline-none page-flush min-h-0 flex-1 overflow-y-auto max-md:rounded-t-3xl max-md:bg-white overscroll-contain scrollbar-gutter-stable">
+diff --git a/src/components/admin-nav.tsx b/src/components/admin-nav.tsx
+index ea5f411..f8f7b01 100644
+--- a/src/components/admin-nav.tsx
++++ b/src/components/admin-nav.tsx
+@@ -7,7 +7,6 @@ import {
+   Mail,
+   Settings,
+   Palette,
+-  BadgeDollarSign,
+   Users,
+   Route,
+   Webhook,
+@@ -70,7 +69,6 @@ const sections: { id?: string; labelKey?: TranslationKey; links: AdminNavLink[]
+     labelKey: "admin.nav.product",
+     links: [
+       { href: "/branding", labelKey: "admin.nav.branding", icon: Palette, permission: "primary" },
+-      { href: "/licenses", labelKey: "admin.nav.licenses", icon: BadgeDollarSign, permission: "primary" },
+     ],
+   },
+ ];
+diff --git a/src/components/license-indicator-types.d.ts b/src/components/license-indicator-types.d.ts
+deleted file mode 100644
+index 9d80098..0000000
+--- a/src/components/license-indicator-types.d.ts
++++ /dev/null
+@@ -1,5 +0,0 @@
+-import type { LicenseStatus } from "@/lib/licenses/types";
+-
+-export type LicenseIndicatorResponse = {
+-	license?: LicenseStatus;
+-};
+diff --git a/src/components/license-indicator-utils.ts b/src/components/license-indicator-utils.ts
+deleted file mode 100644
+index c3dae30..0000000
+--- a/src/components/license-indicator-utils.ts
++++ /dev/null
+@@ -1,13 +0,0 @@
+-import { authFetch } from "@/lib/auth/client";
+-import type { LicenseIndicatorResponse } from "./license-indicator-types";
+-
+-export async function loadLicenseIndicatorStatus() {
+-	try {
+-		const response = await authFetch("/api/licenses", { redirectOnUnauthorized: false });
+-		if (!response.ok) return null;
+-		const data = (await response.json()) as LicenseIndicatorResponse;
+-		return data.license ?? null;
+-	} catch {
+-		return null;
+-	}
+-}
+diff --git a/src/components/license-indicator.tsx b/src/components/license-indicator.tsx
+deleted file mode 100644
+index e967c37..0000000
+--- a/src/components/license-indicator.tsx
++++ /dev/null
+@@ -1,42 +0,0 @@
+-"use client";
+-
+-import Link from "next/link";
+-import { useEffect, useState } from "react";
+-import { useLanguage } from "@/components/language-provider";
+-import { Button } from "@/components/ui/button";
+-import type { LicenseStatus } from "@/lib/licenses/types";
+-import { loadLicenseIndicatorStatus } from "./license-indicator-utils";
+-import { LICENSE_STATUS_CHANGED_EVENT } from "@/lib/licenses/constants";
+-
+-export function LicenseIndicator() {
+-	const { t } = useLanguage();
+-	const [license, setLicense] = useState<LicenseStatus | null>(null);
+-
+-	useEffect(() => {
+-		let cancelled = false;
+-
+-		function load() {
+-			void loadLicenseIndicatorStatus().then((nextLicense) => {
+-				if (!cancelled) setLicense(nextLicense);
+-			});
+-		}
+-
+-		load();
+-		window.addEventListener(LICENSE_STATUS_CHANGED_EVENT, load);
+-		return () => {
+-			cancelled = true;
+-			window.removeEventListener(LICENSE_STATUS_CHANGED_EVENT, load);
+-		};
+-	}, []);
+-
+-	if (!license || license.active) return null;
+-
+-	return (
+-		<Link
+-				href="/licenses"
+-				className="rounded-full bg-blue-100 px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-blue-900 hover:bg-blue-200"
+-			>
+-				{t("license.upgrade")}
+-			</Link>
+-	);
+-}
+diff --git a/src/lib/email/html.ts b/src/lib/email/html.ts
+index 53d0183..b3a0adc 100644
+--- a/src/lib/email/html.ts
++++ b/src/lib/email/html.ts
+@@ -331,7 +331,7 @@ export function prepareEmailHtml(source: string, options: Options = {}) {
+ 		USE_PROFILES: { html: true },
+ 		ADD_TAGS: ["style", rootTag, bodyTag],
+ 		ADD_ATTR: ["target", "loading", "referrerpolicy", ...(options.forOutgoing || options.editor ? ["data-mailflare-quote", "data-mailflare-signature"] : []), ...(options.editor ? EDITOR_ATTRIBUTES : [])],
+-		FORBID_TAGS: ["script", "iframe", "object", "embed", "form", "input", "button", "select", "textarea", "link", "base", "meta", "audio", "video", "source", "template"],
++		FORBID_TAGS: ["script", "iframe", "object", "embed", "form", "input", "button", "select", "textarea", "link", "base", "meta", "title", "audio", "video", "source", "template"],
+ 		FORBID_ATTR: ["is", "slot", "popover", "popovertarget", "popovertargetaction", "command", "commandfor", "interestfor"],
+ 		ALLOW_DATA_ATTR: false,
+ 		RETURN_DOM_FRAGMENT: true,
+diff --git a/src/lib/i18n/en.json b/src/lib/i18n/en.json
+index 00ab1fa..5a92c72 100644
+--- a/src/lib/i18n/en.json
++++ b/src/lib/i18n/en.json
+@@ -983,7 +983,7 @@
+ 	"admin.section.domains": "Add Cloudflare domains and inspect DNS state.",
+ 	"admin.section.branding": "Customize the app name, icon, and favicon.",
+ 	"admin.section.licenses": "Compare Pro and Team one-time licenses.",
+-	"admin.section.accounts": "Add and manage user accounts with a Pro or Team license.",
++	"admin.section.accounts": "Add and manage user accounts.",
+ 	"admin.section.apiKeys": "Manage API access to domains, accounts, and mailboxes.",
+ 	"admin.section.apiKeysTitle": "Admin API keys",
+ 	"admin.page.aiUsage": "AI usage",
 diff --git a/src/lib/licenses/paymug.ts b/src/lib/licenses/paymug.ts
-index 1f0e5f479..acbf16d57 100644
+index 1f0e5f4..acbf16d 100644
 --- a/src/lib/licenses/paymug.ts
 +++ b/src/lib/licenses/paymug.ts
 @@ -9,8 +9,6 @@ export async function callPaymugLicenseApi(
@@ -90,7 +341,7 @@ index 1f0e5f479..acbf16d57 100644
  		throw new Error("Paymug returned an invalid license response");
  	}
 diff --git a/src/lib/licenses/service.ts b/src/lib/licenses/service.ts
-index 0b796bd19..e1dec7e8a 100644
+index 0b796bd..e1dec7e 100644
 --- a/src/lib/licenses/service.ts
 +++ b/src/lib/licenses/service.ts
 @@ -1,164 +1,42 @@
@@ -288,7 +539,7 @@ index 0b796bd19..e1dec7e8a 100644
 +	return getLicenseStatus(env);
  }
 diff --git a/src/lib/mailboxes/access-utils.ts b/src/lib/mailboxes/access-utils.ts
-index 228bf9281..8e35e5cd1 100644
+index 228bf92..8e35e5c 100644
 --- a/src/lib/mailboxes/access-utils.ts
 +++ b/src/lib/mailboxes/access-utils.ts
 @@ -1,17 +1,6 @@
@@ -313,7 +564,7 @@ index 228bf9281..8e35e5cd1 100644
 +	return true;
  }
 diff --git a/tests/account-alias-selection.test.mjs b/tests/account-alias-selection.test.mjs
-index 1073d021a..afd4e0591 100644
+index 1073d02..afd4e05 100644
 --- a/tests/account-alias-selection.test.mjs
 +++ b/tests/account-alias-selection.test.mjs
 @@ -232,28 +232,13 @@ for (const enabled of [true, false]) {
@@ -349,8 +600,22 @@ index 1073d021a..afd4e0591 100644
  });
  
  for (const separateDomains of [false, true]) {
+diff --git a/tests/email-html.test.mjs b/tests/email-html.test.mjs
+index b024c6b..b38edcd 100644
+--- a/tests/email-html.test.mjs
++++ b/tests/email-html.test.mjs
+@@ -191,3 +191,9 @@ test("styled signatures are deterministic and editor copies are inert but export
+ 	assert.match(prepareEmailHtml(preview, { forOutgoing: true }).html, /\.signature\{color:red;background:url\(https:\/\/remote.example\/bg\)/);
+ 	assert.equal(sanitizeEditorHtml(prepareEmailHtml(preview, { forOutgoing: true }).html), preview);
+ });
++
++test("reader drops title and other head-only elements from the body", () => {
++	const result = prepareEmailHtml(`<html><head><title>head</title></head><body><title>XSS-onerror</title><meta http-equiv="refresh" content="0"><base href="https://evil.example/"><link rel="stylesheet" href="https://evil.example/x.css"><p>Hi</p></body></html>`, { reader: true });
++	assert.doesNotMatch(result.html, /<title|<meta|<base|<link|XSS-onerror/);
++	assert.match(result.html, /Hi/);
++});
 diff --git a/tests/mailbox-settings-management.test.mjs b/tests/mailbox-settings-management.test.mjs
-index b55a3535b..fd29e168f 100644
+index b55a353..fd29e16 100644
 --- a/tests/mailbox-settings-management.test.mjs
 +++ b/tests/mailbox-settings-management.test.mjs
 @@ -191,11 +191,11 @@ test("owners and shared mailbox grants keep their existing settings permissions"
@@ -369,7 +634,7 @@ index b55a3535b..fd29e168f 100644
  	}
  });
 diff --git a/tests/messages-route-performance.test.mjs b/tests/messages-route-performance.test.mjs
-index 22d27236c..6e57f83b5 100644
+index 22d2723..6e57f83 100644
 --- a/tests/messages-route-performance.test.mjs
 +++ b/tests/messages-route-performance.test.mjs
 @@ -120,15 +120,13 @@ test("listed owned and read-only shared mailboxes reuse authorization without a
@@ -389,283 +654,3 @@ index 22d27236c..6e57f83b5 100644
  	assert.equal(f.started.length, 0, "denied requests never load mail or enrichment");
  	f.user = null;
  	f.queries.length = 0;
-diff --git a/src/app/(admin)/admin/page.tsx b/src/app/(admin)/admin/page.tsx
-index 2f32e0b79..139438fcd 100644
---- a/src/app/(admin)/admin/page.tsx
-+++ b/src/app/(admin)/admin/page.tsx
-@@ -1,7 +1,7 @@
- "use client";
- 
- import Link from "next/link";
--import { BadgeDollarSign, Bot, Globe2, KeyRound, Mail, Palette, Users } from "@/components/icons";
-+import { Bot, Globe2, KeyRound, Mail, Palette, Users } from "@/components/icons";
- import { useLanguage } from "@/components/language-provider";
- import type { TranslationKey } from "@/lib/i18n/types";
- import { AdminUpdateCard } from "@/components/admin-update-card";
-@@ -44,13 +44,6 @@ const sections: AdminSection[] = [
- 		icon: Palette,
- 		permission: "primary",
- 	},
--	{
--		href: "/licenses",
--		titleKey: "admin.nav.licenses",
--		descriptionKey: "admin.section.licenses",
--		icon: BadgeDollarSign,
--		permission: "primary",
--	},
- 	{
- 		href: "/accounts",
- 		titleKey: "admin.nav.accounts",
-diff --git a/src/app/(admin)/agent/page.tsx b/src/app/(admin)/agent/page.tsx
-index c149b642a..85834e8bf 100644
---- a/src/app/(admin)/agent/page.tsx
-+++ b/src/app/(admin)/agent/page.tsx
-@@ -107,7 +107,7 @@ export default function AdminAgentPage() {
- 		<Card className="rounded-3xl border-0 bg-white p-6">
- 			<CardHeader className="py-0"><CardTitle className="flex items-center gap-2"><Bot className="h-5 w-5" />{t("agentAdmin.provider")}</CardTitle><CardDescription>{t("agentAdmin.providerWarning")}</CardDescription></CardHeader>
- 			<CardContent className="pt-6"><form onSubmit={submit} className="space-y-5">
--				<div className="space-y-2"><Label htmlFor="agent-provider">{t("agentAdmin.providerLabel")}</Label><select id="agent-provider" className="flex h-10 w-full rounded-md border border-neutral-200 bg-transparent px-3 text-sm shadow-sm shadow-neutral-200/50 focus-visible:border-blue-600 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50" value={form.provider} disabled={!loaded} onChange={(event) => setForm((current) => ({ ...current, provider: event.target.value as AgentAdminForm["provider"], baseUrl: event.target.value === "compatible" ? baseUrlForPreset(current.preset, current.baseUrl) : "", model: event.target.value === "cloudflare" ? DEFAULT_CLOUDFLARE_MODEL : "" }))}><option value="cloudflare">{t("agentAdmin.cloudflareAi")}</option><option value="compatible">{t("agentAdmin.openaiCompatible")}</option></select>{form.provider === "cloudflare" && !cloudflareAvailable && <p className="text-xs text-amber-700">{t("agentAdmin.needsBinding")}</p>}</div>
-+				<div className="space-y-2"><Label htmlFor="agent-provider">{t("agentAdmin.providerLabel")}</Label><select id="agent-provider" className="flex h-10 w-full rounded-md border border-neutral-200 bg-transparent px-3 text-sm shadow-sm shadow-neutral-200/50 focus-visible:border-blue-600 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50" value={form.provider} disabled={!loaded} onChange={(event) => setForm((current) => ({ ...current, provider: event.target.value as AgentAdminForm["provider"], baseUrl: event.target.value === "compatible" ? baseUrlForPreset(current.preset, current.baseUrl) : "", model: event.target.value === "cloudflare" ? DEFAULT_CLOUDFLARE_MODEL : "" }))}><option value="cloudflare">{t("agentAdmin.cloudflareAi")}</option><option value="compatible">{t("agentAdmin.openaiCompatible")}</option></select>{loaded && form.provider === "cloudflare" && !cloudflareAvailable && <p className="text-xs text-amber-700">{t("agentAdmin.needsBinding")}</p>}</div>
- 				{form.provider === "compatible" && <>
- 					<div className="space-y-2"><Label htmlFor="agent-preset">{t("agentAdmin.template")}</Label><select id="agent-preset" className="flex h-10 w-full rounded-md border border-neutral-200 bg-transparent px-3 text-sm shadow-sm shadow-neutral-200/50 focus-visible:border-blue-600 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50" value={form.preset} onChange={(event) => { const preset = event.target.value as AgentProviderPreset; setForm((current) => ({ ...current, preset, baseUrl: baseUrlForPreset(preset), apiKey: "", model: "" })); }}>{PROVIDER_PRESETS.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select></div>
- 					<div className="space-y-2"><Label htmlFor="agent-url">{t("agentAdmin.baseUrl")}</Label><Input id="agent-url" type="url" value={form.baseUrl} readOnly={form.preset !== "custom"} placeholder="https://provider.example/v1" onChange={(event) => setForm((current) => ({ ...current, baseUrl: event.target.value, model: "" }))} required /></div>
-diff --git a/src/app/(admin)/layout.tsx b/src/app/(admin)/layout.tsx
-index 674adc86d..5747bd3d2 100644
---- a/src/app/(admin)/layout.tsx
-+++ b/src/app/(admin)/layout.tsx
-@@ -9,7 +9,6 @@ import { ComposeProvider } from "@/components/compose/compose-context";
- import { FloatingComposer } from "@/components/compose/floating-composer";
- import { MailboxProvider } from "@/components/mailbox-provider";
- import { MailboxSelector } from "@/components/mailbox-selector";
--import { LicenseIndicator } from "@/components/license-indicator";
- import { AdminNav } from "@/components/admin-nav";
- import { SidebarProvider } from "@/components/sidebar-state";
- import clsx from "clsx";
-@@ -66,7 +65,6 @@ export default function DashboardLayout({
-             <div className="flex min-h-0 min-w-0 flex-col">
-                             <MobileTopBar title={mobileTitle} />
-               <header className="fixed top-2 right-4 flex items-center gap-4 z-90">
--                <LicenseIndicator />
-                 <MailboxSelector />
-               </header>
-               <main id="main-content" tabIndex={-1} className={clsx("focus:outline-none page-flush min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain rounded-tl-3xl max-md:rounded-t-3xl max-md:bg-white max-md:pb-24 px-6 py-10 scrollbar-gutter-stable lg:px-12", mobileTitle && "max-md:[&_h1]:sr-only")}>
-diff --git a/src/app/(calendar)/layout.tsx b/src/app/(calendar)/layout.tsx
-index 768e832ee..40f2ec53a 100644
---- a/src/app/(calendar)/layout.tsx
-+++ b/src/app/(calendar)/layout.tsx
-@@ -11,7 +11,6 @@ import { AssistantOpenContext } from "@/components/agent/assistant-open-state";
- import { AuthGuard } from "@/components/auth/auth-guard";
- import { ComposeProvider } from "@/components/compose/compose-context";
- import { FloatingComposer } from "@/components/compose/floating-composer";
--import { LicenseIndicator } from "@/components/license-indicator";
- import { MailSearchProvider } from "@/components/mail-search/mail-search-context";
- import { MailboxProvider } from "@/components/mailbox-provider";
- import { MailboxSelector } from "@/components/mailbox-selector";
-@@ -64,7 +63,6 @@ export default function CalendarLayout({ children }: { children: React.ReactNode
-                       </nav>
-                       <div id="calendar-header-slot" className="flex min-w-0 flex-1 items-center md:min-w-max max-md:order-last max-md:basis-full max-md:pl-3 max-md:empty:hidden" />
-                     </div>
--                    <LicenseIndicator />
-                     {assistantEnabled && <Button type="button" variant="ghost" size="sm" className={assistantOpen ? "bg-blue-50 text-blue-700" : "text-neutral-600"} onClick={() => { setAssistantOpen((current) => !current); setAssistantFullSize(false); }} aria-label={assistantOpen ? t("agent.assistant.close") : t("agent.assistant.open")} aria-expanded={assistantOpen} aria-controls="email-assistant-panel"><Sparkles className="h-5 w-5" /></Button>}
-                     <MailboxSelector />
-                   </header>
-diff --git a/src/app/(dashboard)/layout.tsx b/src/app/(dashboard)/layout.tsx
-index 56324795e..e844ec8e1 100644
---- a/src/app/(dashboard)/layout.tsx
-+++ b/src/app/(dashboard)/layout.tsx
-@@ -15,7 +15,6 @@ import { AgentPanel } from "@/components/agent/agent-panel";
- import { AssistantOpenContext } from "@/components/agent/assistant-open-state";
- import { Button } from "@/components/ui/button";
- import { DnsSkippedBanner } from "@/components/dns-skipped-banner";
--import { LicenseIndicator } from "@/components/license-indicator";
- import { DashboardNav } from "@/components/dashboard-nav";
- import { SidebarProvider } from "@/components/sidebar-state";
- import { SidebarAside, MobileMenuButton } from "@/components/sidebar-aside";
-@@ -72,7 +71,6 @@ export default function DashboardLayout({
-                       >
-                         <HelpCircle className="h-5 w-5" />
-                       </Link> */}
--                      <LicenseIndicator />
-                       {assistantEnabled && <Button type="button" variant="ghost" size="sm" className={assistantOpen ? "bg-blue-50 text-blue-700" : "text-neutral-600"} onClick={() => { setAssistantOpen((current) => !current); setAssistantFullSize(false); }} aria-label={assistantOpen ? t("agent.assistant.close") : t("agent.assistant.open")} aria-expanded={assistantOpen} aria-controls="email-assistant-panel"><Sparkles className="h-5 w-5" /></Button>}
-                       <MailboxSelector />
-                     </header>
-diff --git a/src/app/(drive)/layout.tsx b/src/app/(drive)/layout.tsx
-index 6e6448416..6d4ad2333 100644
---- a/src/app/(drive)/layout.tsx
-+++ b/src/app/(drive)/layout.tsx
-@@ -4,7 +4,6 @@ import { SkipToContent } from "@/components/skip-to-content";
- import { Suspense } from "react";
- import { AuthGuard } from "@/components/auth/auth-guard";
- import { ComposeProvider } from "@/components/compose/compose-context";
--import { LicenseIndicator } from "@/components/license-indicator";
- import { MailSearchProvider } from "@/components/mail-search/mail-search-context";
- import { MailboxProvider } from "@/components/mailbox-provider";
- import { MailboxSelector } from "@/components/mailbox-selector";
-@@ -33,7 +32,6 @@ function DriveFrame({ children }: { children: React.ReactNode }) {
- 				<header className="flex h-16 w-full shrink-0 items-center gap-3 pr-4 text-sm">
- 					<MobileMenuButton className="ml-2" />
- 					<div id="drive-header-slot" className="flex min-w-0 flex-1 items-center" />
--					<LicenseIndicator />
- 					<MailboxSelector />
- 				</header>
- 				<main id="main-content" tabIndex={-1} className="focus:outline-none min-h-0 min-w-0 flex-1 overflow-hidden md:pr-4">{children}</main>
-diff --git a/src/app/(settings)/layout.tsx b/src/app/(settings)/layout.tsx
-index ef1568386..a0d56220f 100644
---- a/src/app/(settings)/layout.tsx
-+++ b/src/app/(settings)/layout.tsx
-@@ -10,7 +10,6 @@ import { MailSearchInput } from "@/components/mail-search/mail-search-input";
- import { MailSearchProvider } from "@/components/mail-search/mail-search-context";
- import { MailboxProvider } from "@/components/mailbox-provider";
- import { MailboxSelector } from "@/components/mailbox-selector";
--import { LicenseIndicator } from "@/components/license-indicator";
- import { DashboardNav } from "@/components/dashboard-nav";
- import { SidebarProvider } from "@/components/sidebar-state";
- import { ShortcutsProvider } from "@/components/shortcuts";
-@@ -45,7 +44,6 @@ export default function DashboardLayout({
-                   >
-                     <HelpCircle className="h-5 w-5" />
-                   </Link> */}
--                      <LicenseIndicator />
-                       <MailboxSelector />
-                     </header>
-                     <main id="main-content" tabIndex={-1} className="focus:outline-none page-flush min-h-0 flex-1 overflow-y-auto max-md:rounded-t-3xl max-md:bg-white overscroll-contain scrollbar-gutter-stable">
-diff --git a/src/components/admin-nav.tsx b/src/components/admin-nav.tsx
-index ea5f411bf..f8f7b0170 100644
---- a/src/components/admin-nav.tsx
-+++ b/src/components/admin-nav.tsx
-@@ -7,7 +7,6 @@ import {
-   Mail,
-   Settings,
-   Palette,
--  BadgeDollarSign,
-   Users,
-   Route,
-   Webhook,
-@@ -70,7 +69,6 @@ const sections: { id?: string; labelKey?: TranslationKey; links: AdminNavLink[]
-     labelKey: "admin.nav.product",
-     links: [
-       { href: "/branding", labelKey: "admin.nav.branding", icon: Palette, permission: "primary" },
--      { href: "/licenses", labelKey: "admin.nav.licenses", icon: BadgeDollarSign, permission: "primary" },
-     ],
-   },
- ];
-diff --git a/src/components/license-indicator-types.d.ts b/src/components/license-indicator-types.d.ts
-deleted file mode 100644
-index 9d80098d9..000000000
---- a/src/components/license-indicator-types.d.ts
-+++ /dev/null
-@@ -1,5 +0,0 @@
--import type { LicenseStatus } from "@/lib/licenses/types";
--
--export type LicenseIndicatorResponse = {
--	license?: LicenseStatus;
--};
-diff --git a/src/components/license-indicator-utils.ts b/src/components/license-indicator-utils.ts
-deleted file mode 100644
-index c3dae3015..000000000
---- a/src/components/license-indicator-utils.ts
-+++ /dev/null
-@@ -1,13 +0,0 @@
--import { authFetch } from "@/lib/auth/client";
--import type { LicenseIndicatorResponse } from "./license-indicator-types";
--
--export async function loadLicenseIndicatorStatus() {
--	try {
--		const response = await authFetch("/api/licenses", { redirectOnUnauthorized: false });
--		if (!response.ok) return null;
--		const data = (await response.json()) as LicenseIndicatorResponse;
--		return data.license ?? null;
--	} catch {
--		return null;
--	}
--}
-diff --git a/src/components/license-indicator.tsx b/src/components/license-indicator.tsx
-deleted file mode 100644
-index e967c3754..000000000
---- a/src/components/license-indicator.tsx
-+++ /dev/null
-@@ -1,42 +0,0 @@
--"use client";
--
--import Link from "next/link";
--import { useEffect, useState } from "react";
--import { useLanguage } from "@/components/language-provider";
--import { Button } from "@/components/ui/button";
--import type { LicenseStatus } from "@/lib/licenses/types";
--import { loadLicenseIndicatorStatus } from "./license-indicator-utils";
--import { LICENSE_STATUS_CHANGED_EVENT } from "@/lib/licenses/constants";
--
--export function LicenseIndicator() {
--	const { t } = useLanguage();
--	const [license, setLicense] = useState<LicenseStatus | null>(null);
--
--	useEffect(() => {
--		let cancelled = false;
--
--		function load() {
--			void loadLicenseIndicatorStatus().then((nextLicense) => {
--				if (!cancelled) setLicense(nextLicense);
--			});
--		}
--
--		load();
--		window.addEventListener(LICENSE_STATUS_CHANGED_EVENT, load);
--		return () => {
--			cancelled = true;
--			window.removeEventListener(LICENSE_STATUS_CHANGED_EVENT, load);
--		};
--	}, []);
--
--	if (!license || license.active) return null;
--
--	return (
--		<Link
--				href="/licenses"
--				className="rounded-full bg-blue-100 px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-blue-900 hover:bg-blue-200"
--			>
--				{t("license.upgrade")}
--			</Link>
--	);
--}
-diff --git a/src/lib/email/html.ts b/src/lib/email/html.ts
-index 53d01831d..b3a0adc64 100644
---- a/src/lib/email/html.ts
-+++ b/src/lib/email/html.ts
-@@ -331,7 +331,7 @@ export function prepareEmailHtml(source: string, options: Options = {}) {
- 		USE_PROFILES: { html: true },
- 		ADD_TAGS: ["style", rootTag, bodyTag],
- 		ADD_ATTR: ["target", "loading", "referrerpolicy", ...(options.forOutgoing || options.editor ? ["data-mailflare-quote", "data-mailflare-signature"] : []), ...(options.editor ? EDITOR_ATTRIBUTES : [])],
--		FORBID_TAGS: ["script", "iframe", "object", "embed", "form", "input", "button", "select", "textarea", "link", "base", "meta", "audio", "video", "source", "template"],
-+		FORBID_TAGS: ["script", "iframe", "object", "embed", "form", "input", "button", "select", "textarea", "link", "base", "meta", "title", "audio", "video", "source", "template"],
- 		FORBID_ATTR: ["is", "slot", "popover", "popovertarget", "popovertargetaction", "command", "commandfor", "interestfor"],
- 		ALLOW_DATA_ATTR: false,
- 		RETURN_DOM_FRAGMENT: true,
-diff --git a/src/lib/i18n/en.json b/src/lib/i18n/en.json
-index 00ab1faaa..5a92c72f7 100644
---- a/src/lib/i18n/en.json
-+++ b/src/lib/i18n/en.json
-@@ -983,7 +983,7 @@
- 	"admin.section.domains": "Add Cloudflare domains and inspect DNS state.",
- 	"admin.section.branding": "Customize the app name, icon, and favicon.",
- 	"admin.section.licenses": "Compare Pro and Team one-time licenses.",
--	"admin.section.accounts": "Add and manage user accounts with a Pro or Team license.",
-+	"admin.section.accounts": "Add and manage user accounts.",
- 	"admin.section.apiKeys": "Manage API access to domains, accounts, and mailboxes.",
- 	"admin.section.apiKeysTitle": "Admin API keys",
- 	"admin.page.aiUsage": "AI usage",
-diff --git a/tests/email-html.test.mjs b/tests/email-html.test.mjs
-index b024c6b97..b38edcd80 100644
---- a/tests/email-html.test.mjs
-+++ b/tests/email-html.test.mjs
-@@ -191,3 +191,9 @@ test("styled signatures are deterministic and editor copies are inert but export
- 	assert.match(prepareEmailHtml(preview, { forOutgoing: true }).html, /\.signature\{color:red;background:url\(https:\/\/remote.example\/bg\)/);
- 	assert.equal(sanitizeEditorHtml(prepareEmailHtml(preview, { forOutgoing: true }).html), preview);
- });
-+
-+test("reader drops title and other head-only elements from the body", () => {
-+	const result = prepareEmailHtml(`<html><head><title>head</title></head><body><title>XSS-onerror</title><meta http-equiv="refresh" content="0"><base href="https://evil.example/"><link rel="stylesheet" href="https://evil.example/x.css"><p>Hi</p></body></html>`, { reader: true });
-+	assert.doesNotMatch(result.html, /<title|<meta|<base|<link|XSS-onerror/);
-+	assert.match(result.html, /Hi/);
-+});
--- 
-2.43.0
