@@ -1,8 +1,14 @@
 
-name: Apply selected Mailflare patches
+name: Apply Mailflare patches
 
 on:
   workflow_dispatch:
+    inputs:
+      target_branch:
+        description: Branch to apply patches to
+        required: true
+        default: main
+        type: string
 
 permissions:
   contents: write
@@ -13,34 +19,29 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout main
+      - name: Checkout target branch
         uses: actions/checkout@v4
         with:
-          ref: main
+          ref: ${{ inputs.target_branch }}
           fetch-depth: 0
 
-      - name: Download and apply first patch
+      - name: Download and apply patch
         run: |
+          set -euo pipefail
+
           curl -fsSL \
-            https://github.com/kelvenhighermind/mailflare/commit/f161510e08c00a1cf40a5ac1d59ddfb9ddd671bf.patch \
-            -o first.patch
+            https://raw.githubusercontent.com/XSR1/mailflare/refs/heads/main/.github/mailflare-patches.patch \
+            -o mailflare-patches.patch
 
-          # Exclude wrangler.jsonc changes
-          git apply --exclude=wrangler.jsonc first.patch
-
-      - name: Download and apply second patch
-        run: |
-          curl -fsSL \
-            https://github.com/kelvenhighermind/mailflare/commit/fcc6e0c493c85198f36fd471e0d07bee65578f99.patch \
-            -o second.patch
-
-          git apply second.patch
+          git apply --check mailflare-patches.patch
+          git apply mailflare-patches.patch
 
       - name: Create pull request
         uses: peter-evans/create-pull-request@v7
         with:
-          branch: apply-selected-mailflare-patches
-          base: main
-          title: Apply selected Mailflare patches
-          body: Apply the two selected commits, excluding wrangler.jsonc.
-          commit-message: Apply selected Mailflare patches
+          branch: apply-mailflare-patches-${{ inputs.target_branch }}
+          base: ${{ inputs.target_branch }}
+          title: Apply Mailflare patches
+          body: Apply the selected commits.
+          commit-message: Apply Mailflare patches
+          delete-branch: true
