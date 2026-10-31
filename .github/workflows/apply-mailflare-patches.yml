@@ -21,13 +21,11 @@ jobs:
 
       - name: Download and apply patch
         run: |
-          set -euo pipefail
 
           curl -fsSL \
             https://raw.githubusercontent.com/XSR1/mailflare/refs/heads/main/.github/mailflare-patches.patch \
             -o mailflare-patches.patch
 
-          git apply --check mailflare-patches.patch
           git apply mailflare-patches.patch
 
       - name: Create pull request
