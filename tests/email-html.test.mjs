@@ -191,3 +191,9 @@ test("styled signatures are deterministic and editor copies are inert but export
 	assert.match(prepareEmailHtml(preview, { forOutgoing: true }).html, /\.signature\{color:red;background:url\(https:\/\/remote.example\/bg\)/);
 	assert.equal(sanitizeEditorHtml(prepareEmailHtml(preview, { forOutgoing: true }).html), preview);
 });
+
+test("reader drops title and other head-only elements from the body", () => {
+	const result = prepareEmailHtml(`<html><head><title>head</title></head><body><title>XSS-onerror</title><meta http-equiv="refresh" content="0"><base href="https://evil.example/"><link rel="stylesheet" href="https://evil.example/x.css"><p>Hi</p></body></html>`, { reader: true });
+	assert.doesNotMatch(result.html, /<title|<meta|<base|<link|XSS-onerror/);
+	assert.match(result.html, /Hi/);
+});
