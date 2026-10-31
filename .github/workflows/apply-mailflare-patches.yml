@@ -37,4 +37,4 @@ jobs:
           body: |
             Apply the selected Mailflare patches.
           commit-message: Apply Mailflare patches
-          delete-branch: true
+
