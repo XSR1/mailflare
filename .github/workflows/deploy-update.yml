@@ -1,3 +1,4 @@
+
 name: Dashboard Update
 
 on:
@@ -34,6 +35,12 @@ jobs:
           git config user.name "mailflare-update"
           git config user.email "mailflare-update@users.noreply.github.com"
 
+          # Backup entire .github directory
+          backup_dir="$(mktemp -d)"
+          if [ -d ".github" ]; then
+            cp -a .github "${backup_dir}/github"
+          fi
+
           upstream_url="https://github.com/${UPDATE_SOURCE_REPOSITORY}.git"
           if git remote get-url upstream >/dev/null 2>&1; then
             git remote set-url upstream "${upstream_url}"
@@ -50,13 +57,23 @@ jobs:
           upstream_ref="upstream/${upstream_branch}"
           echo "Replacing ${GITHUB_REF_NAME} with ${upstream_ref}."
 
-          # Keep the installation repository's commit history while replacing
-          # its complete tracked tree with the current upstream tree.
+          # Replace tracked repository files with upstream
           git read-tree --reset -u "${upstream_ref}"
-          if git diff --cached --quiet; then
+
+          # Restore entire original .github directory
+          if [ -d "${backup_dir}/github" ]; then
+            rm -rf .github
+            cp -a "${backup_dir}/github" .github
+          fi
+
+          rm -rf "${backup_dir}"
+
+          if git diff --cached --quiet && git diff --quiet; then
             echo "Repository is already up to date."
             exit 0
           fi
+
+          git add -A
           git commit -m "Update Mailflare from ${UPDATE_SOURCE_REPOSITORY}@${upstream_branch}"
 
       - name: Push update
