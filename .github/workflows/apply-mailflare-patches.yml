@@ -44,3 +44,4 @@ jobs:
           title: Apply selected Mailflare patches
           body: Apply the two selected commits, excluding wrangler.jsonc.
           commit-message: Apply selected Mailflare patches
+
