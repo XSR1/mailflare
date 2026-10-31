@@ -21,12 +21,17 @@ jobs:
 
       - name: Download and apply patch
         run: |
+          set -euo pipefail
 
           curl -fsSL \
             https://raw.githubusercontent.com/XSR1/mailflare/refs/heads/main/.github/mailflare-patches.patch \
             -o mailflare-patches.patch
 
-          git apply --exclude=wrangler.jsonc mailflare-patches.patch
+          git fetch --no-tags https://github.com/XSR1/mailflare.git main
+
+          git apply --3way --index mailflare-patches.patch
+
+          rm mailflare-patches.patch
 
       - name: Create pull request
         uses: peter-evans/create-pull-request@v7
