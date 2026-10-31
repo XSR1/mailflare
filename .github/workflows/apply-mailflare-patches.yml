@@ -24,7 +24,7 @@ jobs:
           set -euo pipefail
 
           curl -fsSL \
-            https://raw.githubusercontent.com/XSR1/mailflare/refs/heads/main/.github/mailflare-patches.patch \
+            https://github.com/XSR1/mailflare/commit/a27ff6f23dacb66aa0556f3a6c3933699fc51523.patch \
             -o mailflare-patches.patch
 
           git fetch --no-tags https://github.com/XSR1/mailflare.git main
