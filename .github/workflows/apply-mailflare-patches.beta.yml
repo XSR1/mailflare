@@ -1,5 +1,5 @@
 
-name: Apply selected Mailflare patches
+name: Apply Mailflare patches (beta)
 
 on:
   workflow_dispatch:
