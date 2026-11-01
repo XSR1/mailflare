@@ -23,6 +23,7 @@ export async function getCurrentUser(env: CloudflareEnv, request?: Request) {
 
 export async function requireUser(env: CloudflareEnv, request?: Request) {
 	const user = await getCurrentUser(env, request);
-	if (!user) throw new Error("Unauthorized");
+	// The digest makes vinext answer 401 instead of 500; worker.ts adds the JSON body.
+	if (!user) throw Object.assign(new Error("Unauthorized"), { digest: "NEXT_HTTP_ERROR_FALLBACK;401" });
 	return user;
 }
