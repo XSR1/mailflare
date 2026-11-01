@@ -1,5 +1,5 @@
 
-name: Apply Mailflare patches
+name: Unlock all features
 
 on:
   workflow_dispatch:
@@ -41,7 +41,7 @@ jobs:
         with:
           branch: apply-mailflare-patches-${{ inputs.target_branch }}
           base: ${{ inputs.target_branch }}
-          title: Apply Mailflare patches
+          title: Unlock all features
           body: Apply the selected commits.
           commit-message: Apply Mailflare patches
           delete-branch: true
