@@ -11,6 +11,7 @@ type LocaleEntry = {
 // Types, validation, cookies, SSR and the selector all derive from this registry.
 export const locales = {
 	en: { label: "English" },
+	fi: { label: "Suomi" },
 	"pt-BR": { label: "Português (Brasil)" },
 	"pt-PT": { label: "Português (Portugal)" },
 	es: { label: "Español" },
