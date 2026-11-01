@@ -7,7 +7,7 @@ on:
       target_branch:
         description: Branch to apply patches to
         required: true
-        default: beta
+        default: main
         type: string
 
 permissions:
@@ -34,7 +34,6 @@ jobs:
             https://github.com/XSR1/mailflare/commit/1650a6c07faaf213bf3f45dffe550610d8862ebb.patch \
             -o mailflare-patches.patch
 
-          git apply --check mailflare-patches.patch
           git apply mailflare-patches.patch
 
       - name: Create pull request
