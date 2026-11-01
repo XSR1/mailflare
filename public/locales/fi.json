@@ -238,7 +238,7 @@
 	"compose.close": "Sulje kirjoitusikkuna",
 	"compose.from": "Lähettäjä",
 	"compose.selectMailboxFirst": "Valitse ensin postilaatikko",
-	"compose.to": "Vastaanottaja",
+	"compose.to": "To",
 	"compose.toPlaceholder": "Vastaanottajat tai \"Maya Chen\" <maya@example.com>",
 	"compose.cc": "Kopio",
 	"compose.bcc": "Piilokopio",
