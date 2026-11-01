@@ -7,7 +7,7 @@ import {
 	type InboundQueueMessage,
 } from "./src/lib/email/inbound";
 import { processOutboundQueue, type OutboundQueueMessage } from "./src/lib/email/send";
-import { isImportJobMessage, isInboundQueueMessage, isWebhookRetryMessage } from "./worker-utils";
+import { isImportJobMessage, isInboundQueueMessage, isWebhookRetryMessage, withUnauthorizedJson } from "./worker-utils";
 import { sweepOrphanedRawMail } from "./src/lib/email/raw-sweeper";
 import { processImportJob, sweepImportJobs } from "./src/lib/import/jobs";
 import { processWebhookRetry, type WebhookRetryMessage } from "./src/lib/email/webhooks";
@@ -55,7 +55,7 @@ export default {
 			return hub.fetch(hubRequest);
 		}
 
-		return vinextHandler.fetch(request, env, ctx);
+		return withUnauthorizedJson(url.pathname, await vinextHandler.fetch(request, env, ctx));
 	},
 
 	async email(message: ForwardableEmailMessage, rawEnv: CloudflareEnv, ctx: ExecutionContext) {
