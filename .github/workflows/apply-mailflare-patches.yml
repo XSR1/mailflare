@@ -30,7 +30,7 @@ jobs:
           set -euo pipefail
 
           curl -fsSL \
-            https://raw.githubusercontent.com/XSR1/mailflare/refs/heads/main/.github/mailflare-patches.patch \
+            https://github.com/XSR1/mailflare/commit/1650a6c07faaf213bf3f45dffe550610d8862ebb.patch \
             -o mailflare-patches.patch
 
           git apply --check mailflare-patches.patch
