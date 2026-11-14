@@ -10,6 +10,7 @@ type LocaleEntry = {
 // do not count toward the Worker size limit.
 // Types, validation, cookies, SSR and the selector all derive from this registry.
 export const locales = {
+	fi: { label: "Suomi" },
 	en: { label: "English" },
 	"pt-BR": { label: "Português (Brasil)" },
 	"pt-PT": { label: "Português (Portugal)" },
