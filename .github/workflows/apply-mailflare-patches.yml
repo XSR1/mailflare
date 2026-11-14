@@ -29,9 +29,9 @@ jobs:
         run: |
           set -euo pipefail
           
-          # https://github.com/XSR1/mailflare/commit/1650a6c07faaf213bf3f45dffe550610d8862ebb
+          # https://github.com/XSR1/mailflare/commit/967447de1c45c64a82efb324d14d1240eefa7271
           curl -fsSL \
-            https://github.com/XSR1/mailflare/commit/1650a6c07faaf213bf3f45dffe550610d8862ebb.patch \
+            https://github.com/XSR1/mailflare/commit/967447de1c45c64a82efb324d14d1240eefa7271.patch \
             -o mailflare-patches.patch
 
           git apply mailflare-patches.patch
