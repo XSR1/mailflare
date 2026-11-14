@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { confirmDestructive } from "@/components/ui/confirm-dialog";
 import type { ReactNode } from "react";
 import { CheckCircle2 } from "@/components/icons";
 import { useLanguage } from "@/components/language-provider";
@@ -46,7 +47,7 @@ export function LicenseActivation({ children }: { children?: ReactNode }) {
 			setStatus(t("licenses.enterKey"));
 			return;
 		}
-		if (nextAction === "deactivate" && !window.confirm(t("licenses.deactivateConfirm"))) return;
+		if (nextAction === "deactivate" && !await confirmDestructive(t("licenses.deactivateConfirm"))) return;
 
 		setAction(nextAction);
 		setStatus(null);
@@ -85,6 +86,9 @@ export function LicenseActivation({ children }: { children?: ReactNode }) {
 							{t("licenses.activatedBody", { plan: formatLicensePlan(license.plan, t) })}
 						</p>
 						<p className="mt-1 text-sm text-neutral-500">{license.seatLimit === null ? t("licenses.seatsUnlimited") : t("licenses.seats", { limit: license.seatLimit })}</p>
+						<Button type="button" variant="outline" className="mt-5" onClick={() => void submit("deactivate")} disabled={action !== null}>
+							{action === "deactivate" ? t("licenses.deactivating") : t("licenses.deactivate")}
+						</Button>
 						{status && <p role="status" className="mt-3 text-sm text-neutral-500">{status}</p>}
 					</div>
 				</CardContent>
